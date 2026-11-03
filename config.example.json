@@ -1,0 +1,28 @@
+{
+  "listen": "0.0.0.0",
+  "port": 8080,
+  "timezone": "Asia/Tokyo",
+  "schedule": "04:17",
+  "state_dir": "/var/lib/compose-keeper",
+  "secure_cookie": false,
+  "engine_command": ["podman"],
+  "compose_command": ["podman", "compose"],
+  "projects": [
+    {
+      "id": "example",
+      "name": "Example Web",
+      "project_name": "example",
+      "directory": "/srv/compose/example",
+      "compose_files": ["compose.yaml"],
+      "data_paths": ["/srv/compose/example/data"],
+      "backup_path": "/srv/backups/example",
+      "healthcheck": true,
+      "health_timeout": 180,
+      "health_interval": 5,
+      "healthy_samples": 3,
+      "command_timeout": 900,
+      "web": {"enabled": true, "url": "http://127.0.0.1:8081/", "status_codes": [200], "timeout": 5},
+      "scripts": {}
+    }
+  ]
+}

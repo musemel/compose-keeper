@@ -1,0 +1,21 @@
+[Unit]
+Description=Compose Keeper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/compose-keeper
+EnvironmentFile=/etc/compose-keeper.env
+ExecStart=/usr/bin/python3 /opt/compose-keeper/keeper.py --config /etc/compose-keeper.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+# Keep detached Podman conmon processes alive across manager restarts.
+# Keeper itself terminates only its currently executing command process groups.
+KillMode=process
+Delegate=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
