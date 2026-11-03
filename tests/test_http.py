@@ -96,6 +96,15 @@ class HttpTests(unittest.TestCase):
         self.login()
         self.assertEqual(self.request('/api/logs/../../config.json')[0], 404)
 
+    def test_restore_requires_explicit_confirmation_and_snapshot(self):
+        self.keeper.projects = [{'id': 'app'}]
+        self.assertEqual(self.request('/api/restore', {'id': 'app'})[0], 401)
+        self.login()
+        self.assertEqual(self.request('/api/restore', {'id': 'app', 'backup_id': 'snapshot'})[0], 400)
+        with patch.object(self.keeper, 'storage_action', return_value=True) as action:
+            self.assertEqual(self.request('/api/restore', {'id': 'app', 'backup_id': 'snapshot', 'confirmed': True})[0], 202)
+            action.assert_called_once_with('app', 'restore', 'snapshot')
+
 
 if __name__ == '__main__':
     unittest.main()

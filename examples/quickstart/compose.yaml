@@ -1,0 +1,15 @@
+services:
+  web:
+    image: docker.io/library/nginx:alpine
+    ports:
+      - "18091:80"
+      - "18092:80"
+    volumes:
+      - ./data/site:/usr/share/nginx/html:ro
+      - ./data/config:/etc/nginx/conf.d:ro
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://127.0.0.1/healthz || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped

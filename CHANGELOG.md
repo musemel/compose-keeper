@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Show backup availability, creation time, logical size, file count and storage path.
+- Manual backup and confirmed restore of saved data and exact image IDs, with interrupted-operation recovery.
+- Validate project paths, snapshot identity, file count and size before restoring.
+- Separate application, configuration, deployment, scripts, tests and documentation folders.
+- Standard and custom examples for all four lifecycle actions.
+- Runnable generic quickstart with two persistent directories and two HTTP bindings.
+
 ## 0.3.0
 
 - Set daily update time and timezone in the web UI, with persisted settings.

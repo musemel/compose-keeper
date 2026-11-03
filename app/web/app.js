@@ -5,11 +5,12 @@ try { language = localStorage.getItem('keeper-language') || language; } catch {}
 if (!messages[language]) language='en';
 let selected=null, cached=null, refreshing=false, notice=null, scheduleDirty=false;
 const expandedProjects=new Set();
+let pendingRestore=null;
 function t(key) {return messages[language][key] || key;}
 function node(tag,text,cls){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;}
 function date(value){return value?new Date(value).toLocaleString(language==='ja'?'ja-JP':'en-US'):'—';}
 function translate(){document.documentElement.lang=language;$('language').value=language;document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));if(notice)$('message').textContent=t(notice);if(cached)render(cached);}
-function errorMessage(error){return t({'ログインしてください':'auth','キーが違います':'badkey','しばらく待って再試行してください':'limited','処理中です':'busy','Recovery required':'recovery','Unknown project':'unknown','Schedule must be HH:MM':'invalid_schedule','Invalid timezone':'invalid_timezone'}[error] || error);}
+function errorMessage(error){return t({'ログインしてください':'auth','キーが違います':'badkey','しばらく待って再試行してください':'limited','処理中です':'busy','Recovery required':'recovery','Unknown project':'unknown','Schedule must be HH:MM':'invalid_schedule','Invalid timezone':'invalid_timezone','Backup changed or is unavailable':'backup_unavailable'}[error] || error);}
 async function api(path,body){
   const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Keeper-Request':'1'},body:JSON.stringify(body)});
   const data=await r.json();
@@ -17,6 +18,8 @@ async function api(path,body){
   if(!r.ok){const e=new Error(errorMessage(data.error||String(r.status)));e.status=r.status;throw e;}
   return data;
 }
+function bytes(value){if(value===undefined||value===null)return '—';const units=['B','KiB','MiB','GiB','TiB'];let n=Number(value),i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toFixed(i?1:0)} ${units[i]}`;}
+function restorePrompt(p){const backup=p.inventory?.backup;pendingRestore={id:p.id,backup_id:backup.id};$('restore-summary').textContent=[p.name,date(backup.created_at),backup.path,...backup.data_paths].join('\n');$('restore-dialog').showModal();}
 async function action(id,operation='run'){
   try{await api('/api/'+operation,{id});notice='begun';$('message').textContent=t(notice);await refresh();}
   catch(e){notice=null;$('message').textContent=e.message;}
@@ -32,14 +35,16 @@ function render(data){
     for(const c of p.inventory?.containers||[])if(c.service)images[c.service]=c.image_id;
     for(const [service,id] of Object.entries(images)){const line=node('div',`${service}: ${p.image_refs?.[service]||p.inventory?.containers?.find(c=>c.service===service)?.image||''}`);line.append(node('code',id.slice(0,24)));version.append(line);}
     if(!version.childNodes.length)version.textContent=t('first');
+    const backup=p.inventory?.backup;const backupCell=node('td','', 'backup-cell');backupCell.dataset.label=t('backup_state');backupCell.append(node('strong',t('backup_'+(backup?.status||'loading'))));if(backup?.created_at)backupCell.append(node('small',date(backup.created_at)));if(Number.isFinite(backup?.size_bytes))backupCell.append(node('small',`${bytes(backup.size_bytes)} · ${backup.file_count} ${t('files')} · ${backup.data_paths.length} ${t('paths')}`));if(backup?.path)backupCell.append(node('small',backup.path));if(backup?.error)backupCell.append(node('small',backup.error,'error'));
     const checked=node('td',date(p.last_checked));checked.dataset.label=t('checked');const updated=node('td',date(p.last_updated));updated.dataset.label=t('updated');
-    const status=node('td',t(({updated:'update_done',start:'starting',stop:'stopping'})[p.status]||p.status||'unknown'),p.status?.includes('failed')||p.status==='error'?'error':'status');status.dataset.label=t('status');row.append(version,checked,updated,status);
+    const status=node('td',t(({updated:'update_done',start:'starting',stop:'stopping'})[p.status]||p.status||'unknown'),p.status?.includes('failed')||p.status==='error'?'error':'status');status.dataset.label=t('status');row.append(version,backupCell,checked,updated,status);
     const actions=node('td','');
     for(const [key,operation] of [['start','start'],['stop','stop'],['check','run']]){const b=node('button',t(key));b.disabled=data.busy||p.recovery_pending||(operation==='run'&&p.manual_stopped);b.onclick=()=>action(p.id,operation);actions.append(b);}
+    const backUp=node('button',t('backup_now'));backUp.disabled=data.busy||p.recovery_pending;backUp.onclick=()=>action(p.id,'backup');actions.append(backUp);const restore=node('button',t('restore_backup'));restore.disabled=data.busy||p.recovery_pending||!backup?.restorable;restore.onclick=()=>restorePrompt(p);actions.append(restore);
     const details=node('button',t('details'));details.onclick=()=>{selected=selected===p.id?null:p.id;render(cached);if(selected)refresh();};actions.append(details);
     if(p.recovery_pending){const b=node('button',t('recover'));b.disabled=data.busy;b.onclick=()=>action(p.id,'recover');actions.append(b);}
     row.append(actions);rows.push(row);
-    const cr=node('tr','','container-row'),cell=node('td','');cell.colSpan=6;
+    const cr=node('tr','','container-row'),cell=node('td','');cell.colSpan=7;
     const inv=p.inventory;const disclosure=node('details','');disclosure.open=expandedProjects.has(p.id);disclosure.addEventListener('toggle',()=>{if(!disclosure.isConnected)return;if(disclosure.open)expandedProjects.add(p.id);else expandedProjects.delete(p.id);});disclosure.append(node('summary',`${t('containers')} (${inv?.containers?.length||0})`));
     if(inv?.error)disclosure.append(node('div',inv.error,'error'));
     else if(!inv?.containers?.length)disclosure.append(node('small',t(inv?.observed_at?'empty':'observing')));
@@ -56,6 +61,8 @@ async function refresh(){
   catch(e){if(e.status!==401){notice=null;$('message').textContent=e.message;}}
   finally{refreshing=false;}
 }
+$('restore-cancel').onclick=()=>{$('restore-dialog').close();pendingRestore=null;};
+$('restore-confirm').onclick=async()=>{if(!pendingRestore)return;const button=$('restore-confirm');button.disabled=true;try{await api('/api/restore',{...pendingRestore,confirmed:true});$('restore-dialog').close();pendingRestore=null;notice='begun';$('message').textContent=t(notice);await refresh();}catch(e){notice=null;$('message').textContent=e.message;$('restore-dialog').close();}finally{button.disabled=false;}};
 $('schedule-settings').oninput=()=>{scheduleDirty=true;};
 $('schedule-settings').onsubmit=async e=>{e.preventDefault();try{await api('/api/settings',{schedule:$('schedule-time').value,timezone:$('schedule-timezone').value});scheduleDirty=false;notice='schedule_saved';$('message').textContent=t(notice);await refresh();}catch(e){notice=null;$('message').textContent=e.message;}};
 $('language').onchange=()=>{language=$('language').value;try{localStorage.setItem('keeper-language',language);}catch{}translate();};

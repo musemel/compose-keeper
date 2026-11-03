@@ -18,4 +18,4 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y rsync acl attr
       - run: python -m pip install -r requirements.txt
       - name: Test in disposable root environment
-        run: sudo "$(which python)" -m unittest -v test_keeper.py test_http.py test_metadata.py test_control.py test_settings.py
+        run: sudo "$(which python)" -m unittest discover -s tests -v
